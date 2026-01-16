@@ -1,7 +1,6 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import "../env.js"; // 👈 load env FIRST, before anything else
 
-import app from './app.js';
+import app from "./app.js";
 
 const PORT = process.env.PORT || 8080;
 
