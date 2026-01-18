@@ -7,13 +7,14 @@ import authMiddleware from "../middleware/authMiddleware.js";
 
 // Multer middleware for handling file uploads
 import upload from "../middleware/upload.middleware.js";
- 
+
 // File upload controller
 import { uploadFile } from "../controllers/fileController.js";
 import { getMyFiles } from "../controllers/fileController.js"; // updated
 import { deleteFile } from "../controllers/fileController.js"; // delete method added
 //import { downloadFile } from "../controllers/fileController.js"; // download method added
 import { permanentDeleteFile } from "../controllers/fileController.js"; // permanent delete method added
+import { renameFile, restoreFile } from "../controllers/fileController.js";
 
 
 const router = express.Router();
@@ -85,6 +86,24 @@ router.delete(
   authMiddleware,
   permanentDeleteFile
 ); // permanent delete method added
+
+/*
+  Route: PUT /api/files/:fileId/rename
+*/
+router.put(
+  "/:fileId/rename",
+  authMiddleware,
+  renameFile
+);
+
+/*
+  Route: PUT /api/files/:fileId/restore
+*/
+router.put(
+  "/:fileId/restore",
+  authMiddleware,
+  restoreFile
+);
 
 
 export default router;

@@ -9,7 +9,9 @@ import authMiddleware from "../middleware/authMiddleware.js";
 import {
   createFolder,
   getMyFolders,
-  deleteFolder
+  deleteFolder,
+  renameFolder,
+  restoreFolder
 } from "../controllers/folderController.js";
 
 const router = express.Router();
@@ -51,6 +53,24 @@ router.delete(
   "/:folderId",
   authMiddleware,
   deleteFolder
+);
+
+/*
+  Route: PUT /api/folders/:folderId/rename
+*/
+router.put(
+  "/:folderId/rename",
+  authMiddleware,
+  renameFolder
+);
+
+/*
+  Route: PUT /api/folders/:folderId/restore
+*/
+router.put(
+  "/:folderId/restore",
+  authMiddleware,
+  restoreFolder
 );
 
 export default router;

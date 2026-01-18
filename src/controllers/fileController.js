@@ -83,18 +83,23 @@ export const uploadFile = async (req, res) => {
 export const getMyFiles = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { folderId } = req.query;
+    const { folderId, trash } = req.query;
 
     let query = supabase
       .from("files")
       .select("*")
-      .eq("owner_id", userId)
-      .eq("is_deleted", false);
+      .eq("owner_id", userId);
 
-    if (folderId) {
-      query = query.eq("folder_id", folderId);
+    if (trash === "true") {
+      query = query.eq("is_deleted", true);
     } else {
-      query = query.is("folder_id", null);
+      query = query.eq("is_deleted", false);
+
+      if (folderId) {
+        query = query.eq("folder_id", folderId);
+      } else {
+        query = query.is("folder_id", null);
+      }
     }
 
     const { data: files, error } = await query.order("created_at", {
@@ -161,6 +166,101 @@ export const deleteFile = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       message: "Server error during file deletion",
+      error: error.message
+    });
+  }
+};
+
+/* ============================== */
+/* RESTORE FILE (FROM TRASH)      */
+/* ============================== */
+export const restoreFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const userId = req.user.id;
+
+    const { data: file, error: fetchError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (fetchError || !file) {
+      return res.status(404).json({
+        message: "File not found or access denied"
+      });
+    }
+
+    const { error: restoreError } = await supabase
+      .from("files")
+      .update({ is_deleted: false })
+      .eq("id", fileId);
+
+    if (restoreError) {
+      return res.status(500).json({
+        message: "Failed to restore file",
+        error: restoreError.message
+      });
+    }
+
+    return res.status(200).json({
+      message: "File restored successfully"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error during file restoration",
+      error: error.message
+    });
+  }
+};
+
+/* ============================== */
+/* RENAME FILE                    */
+/* ============================== */
+export const renameFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { newName } = req.body;
+    const userId = req.user.id;
+
+    if (!newName) {
+      return res.status(400).json({ message: "New name is required" });
+    }
+
+    const { data: file, error: fetchError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (fetchError || !file) {
+      return res.status(404).json({
+        message: "File not found or access denied"
+      });
+    }
+
+    const { error: updateError } = await supabase
+      .from("files")
+      .update({ name: newName })
+      .eq("id", fileId);
+
+    if (updateError) {
+      return res.status(500).json({
+        message: "Failed to rename file",
+        error: updateError.message
+      });
+    }
+
+    return res.status(200).json({
+      message: "File renamed successfully"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error during file rename",
       error: error.message
     });
   }

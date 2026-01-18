@@ -3,6 +3,7 @@ import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import uploadRoutes from "./routes/upload.routes.js"; //import upload routes
+import folderRoutes from "./routes/folderRoutes.js"; // ✅ IMPORTED
 
 const app = express();
 
@@ -37,5 +38,6 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/upload", uploadRoutes); //upload routes
+app.use("/api/folders", folderRoutes); // ✅ MOUNTED
 
 export default app;

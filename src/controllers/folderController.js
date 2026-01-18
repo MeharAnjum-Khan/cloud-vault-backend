@@ -79,20 +79,29 @@ export const getMyFolders = async (req, res) => {
   try {
     // Logged-in user ID
     const userId = req.user.id;
+    const { parentId, trash } = req.query;
 
     /*
-      Fetch all non-deleted folders of the user
-
-      Why this API?
-      - Required to show folder tree on frontend
-      - Needed for folder-based uploads
+      Fetch folders of the user
     */
-    const { data: folders, error } = await supabase
+    let query = supabase
       .from("folders")
       .select("*")
-      .eq("owner_id", userId)
-      .eq("is_deleted", false)
-      .order("created_at", { ascending: true });
+      .eq("owner_id", userId);
+
+    if (trash === "true") {
+      query = query.eq("is_deleted", true);
+    } else {
+      // Only active folders
+      query = query.eq("is_deleted", false);
+      if (parentId) {
+        query = query.eq("parent_id", parentId);
+      } else {
+        query = query.is("parent_id", null);
+      }
+    }
+
+    const { data: folders, error } = await query.order("created_at", { ascending: true });
 
     if (error) {
       return res.status(500).json({
@@ -127,10 +136,6 @@ export const deleteFolder = async (req, res) => {
 
     /*
       Step 1: Verify folder ownership
-
-      Prevents:
-      - Deleting someone else's folder
-      - Deleting invalid folder ID
     */
     const { data: folder, error: fetchError } = await supabase
       .from("folders")
@@ -147,10 +152,6 @@ export const deleteFolder = async (req, res) => {
 
     /*
       Step 2: Soft delete the folder
-
-      Why soft delete?
-      - Keeps folder structure safe
-      - Allows recovery later (if needed)
     */
     const { error: deleteError } = await supabase
       .from("folders")
@@ -171,6 +172,101 @@ export const deleteFolder = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       message: "Server error during folder deletion",
+      error: error.message,
+    });
+  }
+};
+
+/* ===================================== */
+/* RESTORE FOLDER (FROM TRASH)            */
+/* ===================================== */
+export const restoreFolder = async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const userId = req.user.id;
+
+    const { data: folder, error: fetchError } = await supabase
+      .from("folders")
+      .select("*")
+      .eq("id", folderId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (fetchError || !folder) {
+      return res.status(404).json({
+        message: "Folder not found or access denied",
+      });
+    }
+
+    const { error: restoreError } = await supabase
+      .from("folders")
+      .update({ is_deleted: false })
+      .eq("id", folderId);
+
+    if (restoreError) {
+      return res.status(500).json({
+        message: "Failed to restore folder",
+        error: restoreError.message,
+      });
+    }
+
+    return res.status(200).json({
+      message: "Folder restored successfully",
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error during folder restoration",
+      error: error.message,
+    });
+  }
+};
+
+/* ===================================== */
+/* RENAME FOLDER                          */
+/* ===================================== */
+export const renameFolder = async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const { newName } = req.body;
+    const userId = req.user.id;
+
+    if (!newName) {
+      return res.status(400).json({ message: "New name is required" });
+    }
+
+    const { data: folder, error: fetchError } = await supabase
+      .from("folders")
+      .select("*")
+      .eq("id", folderId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (fetchError || !folder) {
+      return res.status(404).json({
+        message: "Folder not found or access denied",
+      });
+    }
+
+    const { error: updateError } = await supabase
+      .from("folders")
+      .update({ name: newName })
+      .eq("id", folderId);
+
+    if (updateError) {
+      return res.status(500).json({
+        message: "Failed to rename folder",
+        error: updateError.message,
+      });
+    }
+
+    return res.status(200).json({
+      message: "Folder renamed successfully",
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error during folder rename",
       error: error.message,
     });
   }
