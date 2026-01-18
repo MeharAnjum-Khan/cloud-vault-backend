@@ -25,6 +25,7 @@ import upload from "../middleware/upload.middleware.js";
  * - Contains the actual upload handling logic
  */
 import { uploadFileController } from "../controllers/upload.controller.js";
+import authMiddleware from "../middleware/authMiddleware.js"; // ✅ ADDED: auth middleware
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ const router = express.Router();
  */
 router.post(
   "/",
+  authMiddleware, // ✅ ADDED: Verify token before upload
   upload.single("file"),
   uploadFileController
 );

@@ -17,16 +17,19 @@ import { supabase } from "../config/supabaseClient.js";
  * Stores uploaded file details in Supabase database
  */
 export const saveFileMetadata = async (fileData) => {
-  const { originalName, mimeType, size, path } = fileData;
+  const { originalName, mimeType, size, path, ownerId, folderId } = fileData;
 
   const { data, error } = await supabase
-    .from("files") // Supabase table name
+    .from("files")
     .insert([
       {
-        original_name: originalName,
-        mime_type: mimeType,
-        size,
-        path,
+        name: originalName,          // ✅ correct
+        mime_type: mimeType,         // ✅ correct
+        size_bytes: size,            // ✅ correct
+        storage_path: path,          // ✅ correct
+        owner_id: ownerId || null,   // ✅ required FK
+        folder_id: folderId || null, // ✅ optional FK
+        is_deleted: false,
       },
     ])
     .select()

@@ -11,6 +11,9 @@
 import fs from "fs";
 import path from "path";
 
+/* ✅ ADDED: Supabase client import for DB operations */
+import supabase from "../config/supabaseClient.js";
+
 /**
  * uploadFileService
  *
@@ -60,17 +63,44 @@ export const uploadFileService = async (file) => {
  * - Simply logs metadata
  * - Returns a mock response
  */
-export const saveFileMetadata = async ({ filename, mimetype, size }) => {
-  console.log("Saving file metadata:", {
-    filename,
-    mimetype,
-    size,
+export const saveFileMetadata = async ({
+  filename,
+  mimetype,
+  size,
+  path,
+  owner_id,
+  folder_id = null,
+}) => {
+  // 🔍 DEBUG: verify EXACT values being inserted
+  console.log("🔍 Upload debug (REAL INSERT):", {
+    owner_id,
+    name: filename,
+    size_bytes: size,
+    mime_type: mimetype,
+    storage_path: path,
+    folder_id,
+    is_deleted: false,
   });
 
-  return {
-    id: Date.now(), // temporary fake ID
-    filename,
-    mimetype,
-    size,
-  };
+  const { data, error } = await supabase
+    .from("files")
+    .insert([
+      {
+        owner_id: owner_id,
+        name: filename,
+        mime_type: mimetype,
+        size_bytes: size,
+        storage_path: path,
+        folder_id: folder_id,
+        is_deleted: false,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
 };

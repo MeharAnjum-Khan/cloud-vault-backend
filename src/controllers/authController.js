@@ -1,7 +1,6 @@
 console.log("✅ authController loaded");
 
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import supabase from "../config/supabaseClient.js";
 import { generateToken } from "../config/jwt.js";
 

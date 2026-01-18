@@ -12,16 +12,19 @@
  * - Controller only coordinates things
  */
 
-import { uploadFileService } from "../services/upload.service.js";
+import {
+  uploadFileService,
+  saveFileMetadata, // ✅ ADDED: import metadata saver
+} from "../services/upload.service.js";
 
 /**
  * uploadFileController
  *
  * Flow:
- * 1️⃣ Multer puts file on req.file
- * 2️⃣ We pass that file to the service
- * 3️⃣ Service saves file to disk
- * 4️⃣ We return success response
+ * 1️ Multer puts file on req.file
+ * 2️ We pass that file to the service
+ * 3️ Service saves file to disk
+ * 4️ We return success response
  */
 export const uploadFileController = async (req, res) => {
   try {
@@ -31,10 +34,22 @@ export const uploadFileController = async (req, res) => {
     // Call service to handle actual upload
     const uploadedFile = await uploadFileService(file);
 
+    /* =====================================================
+       ✅ ADDED: Save file metadata to database
+       ===================================================== */
+         const fileRecord = await saveFileMetadata({
+            owner_id: req.user.id,                 // ✅ FIXED
+            filename: uploadedFile.fileName,
+            mimetype: uploadedFile.mimeType,
+            size: uploadedFile.fileSize,            // ✅ KEY NAME MATCH
+            path: uploadedFile.path,                // ✅ KEY NAME MATCH
+ });
+
     // Send success response
     return res.status(200).json({
       message: "File uploaded successfully",
       file: uploadedFile,
+      dbRecord: fileRecord, // ✅ ADDED: DB confirmation
     });
   } catch (error) {
     console.error("Upload error:", error.message);
