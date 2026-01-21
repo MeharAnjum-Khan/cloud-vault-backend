@@ -4,47 +4,28 @@
  *
  * CHANGE IN THIS STEP:
  * - Earlier: Files were stored in MEMORY (RAM)
- * - Now: Files are stored on DISK (inside /uploads folder)
+ * - Now: Files are stored in MEMORY (REQUIRED FOR SUPABASE)
  *
  * WHY THIS CHANGE:
- * - Memory storage does NOT save files permanently
- * - Real apps always store uploaded files on disk or cloud
+ * - Supabase Storage requires `file.buffer`
+ * - `file.buffer` is ONLY available with memoryStorage()
  */
 
 import multer from "multer";
-import path from "path";
-import fs from "fs";
 
 /* =====================================================
-   ENSURE UPLOADS FOLDER EXISTS
+   STORAGE CONFIGURATION
    ===================================================== */
 
-// Absolute path to /uploads folder (at project root)
-const uploadDir = path.join(process.cwd(), "uploads");
+/*
+  🔴 IMPORTANT FIX (DO NOT REMOVE)
 
-// Create folder if it doesn't exist
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+  Supabase Storage requires `file.buffer`
+  `file.buffer` is ONLY available when using memoryStorage()
+*/
 
-/* =====================================================
-   STORAGE CONFIGURATION (DISK)
-   ===================================================== */
-
-const storage = multer.diskStorage({
-  // Where to store the file
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-
-  // How to name the file
-  filename: (req, file, cb) => {
-    const uniqueName =
-      Date.now() + "-" + file.originalname;
-
-    cb(null, uniqueName);
-  },
-});
+// ✅ CORRECT: memoryStorage is REQUIRED for Supabase
+const storage = multer.memoryStorage();
 
 /* =====================================================
    MULTER INSTANCE

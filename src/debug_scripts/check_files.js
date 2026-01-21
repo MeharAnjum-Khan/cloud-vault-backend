@@ -20,8 +20,8 @@ async function checkFiles() {
 
     if (files.length > 0) {
         console.log("dumping first 5 files:");
-        files.slice(0, 5).forEach(f => {
-            console.log(`- ID: ${f.id}, Name: ${f.name}, Owner: ${f.owner_id}, Deleted: ${f.is_deleted}`);
+        files.slice(-5).forEach(f => {
+            console.log("- Full file data:", f);
         });
     }
 }

@@ -8,7 +8,7 @@
  * - No schemas or models are defined here
  */
 
-import { supabase } from "../config/supabaseClient.js";
+import supabase from "../config/supabaseClient.js";
 
 /**
  * saveFileMetadata

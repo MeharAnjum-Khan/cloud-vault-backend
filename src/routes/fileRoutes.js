@@ -15,6 +15,8 @@ import { deleteFile } from "../controllers/fileController.js"; // delete method 
 //import { downloadFile } from "../controllers/fileController.js"; // download method added
 import { permanentDeleteFile } from "../controllers/fileController.js"; // permanent delete method added
 import { renameFile, restoreFile } from "../controllers/fileController.js";
+import { sharefile} from "../controllers/fileController.js";
+import { getsharedfile } from "../controllers/fileController.js";
 
 
 const router = express.Router();
@@ -41,11 +43,11 @@ router.post(
   1. authMiddleware → checks JWT & sets req.user
   2. getMyFiles → returns all files of logged-in user
 */
-router.get( // updated
-  "/",     // updated
-  authMiddleware, // updated
-  getMyFiles // updated
-); // updated
+router.get( 
+  "/",     
+  authMiddleware, 
+  getMyFiles 
+); 
 
 /*
   Route: DELETE /api/files/:fileId
@@ -58,7 +60,7 @@ router.delete(
   "/:fileId",
   authMiddleware,
   deleteFile
-); // delete method added
+); 
 
 /*
   Route: GET /api/files/:fileId/download
@@ -85,13 +87,13 @@ router.delete(
   "/:fileId/permanent",
   authMiddleware,
   permanentDeleteFile
-); // permanent delete method added
+); 
 
 /*
   Route: PUT /api/files/:fileId/rename
 */
 router.put(
-  "/:fileId/rename",
+ "/:fileId/rename",
   authMiddleware,
   renameFile
 );
@@ -104,6 +106,22 @@ router.put(
   authMiddleware,
   restoreFile
 );
+/*
+  Route: POST /api/files/:fileId/share
+  Only owner can create share link
+*/
+router.post(
+  "/:fileId/share", 
+  authMiddleware, 
+  sharefile
+);
 
+/*
+  Route: GET /api/files/share/:token
+  Public access using token
+*/
+router.get(
+  "/share/:token",
+   getsharedfile);
 
 export default router;

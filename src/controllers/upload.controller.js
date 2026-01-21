@@ -40,9 +40,9 @@ export const uploadFileController = async (req, res) => {
          const fileRecord = await saveFileMetadata({
             owner_id: req.user.id,                 // ✅ FIXED
             filename: uploadedFile.fileName,
-            mimetype: uploadedFile.mimeType,
-            size: uploadedFile.fileSize,            // ✅ KEY NAME MATCH
-            path: uploadedFile.path,                // ✅ KEY NAME MATCH
+            mime_type: uploadedFile.mimeType,
+            size_bytes: uploadedFile.fileSize,            // ✅ KEY NAME MATCH
+            storage_path: uploadedFile.path,                // ✅ KEY NAME MATCH
  });
 
     // Send success response

@@ -1,10 +1,26 @@
 // src/controllers/fileController.js
 
+import crypto from "crypto";
 import supabase from "../config/supabaseClient.js";
 
 export const uploadFile = async (req, res) => {
   try {
     const file = req.file;
+        // ❗ CRITICAL SAFETY CHECK (PREVENTS NULL VALUES)
+    if (!file || !file.buffer || !file.size || !file.mimetype) {
+      return res.status(400).json({
+        message: "Invalid file data received from upload middleware"
+      });
+    }
+
+    // 🔍 DEBUG: confirm Multer memoryStorage is working correctly
+    console.log("✅ FINAL FILE OBJECT:", {
+      originalname: file.originalname,
+      size: file.size,
+      mimetype: file.mimetype,
+      hasBuffer: !!file.buffer
+    });
+
     const userId = req.user.id;
     const { folder_id } = req.body;
 
@@ -28,18 +44,6 @@ export const uploadFile = async (req, res) => {
         error: storageError.message
       });
     }
-
-    // 🔍 DEBUG: verify EXACT values before DB insert
-    console.log("🔍 Upload debug:", {
-      owner_id: req.user.id,
-      name: file.originalname,
-      size_bytes: file.size,
-      mime_type: file.mimetype,
-      storage_path: storagePath,
-      folder_id: folder_id || null,
-      is_deleted: false
-    });
-
 
     const { data: fileRecord, error: dbError } = await supabase
       .from("files")
@@ -321,3 +325,136 @@ export const permanentDeleteFile = async (req, res) => {
     });
   }
 };
+/* ============================== */
+/* SHARE FILE (CREATE LINK)       */
+/* ============================== */
+export const sharefile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const userId = req.user.id;
+
+    // 1. Verify file ownership
+    const { data: file, error: fileError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (fileError || !file) {
+      return res.status(404).json({
+        message: "File not found or access denied"
+      });
+    }
+
+    // 2. Generate secure share token
+    const token = crypto.randomUUID();
+
+    // 3. Save share record
+    const { error: shareError } = await supabase
+      .from("file_shares")
+      .insert([
+        {
+          file_id: fileId,
+          creator_id: userId,
+          token,
+          permission: "view", // default permission
+          expires_at: null
+        }
+      ]);
+
+    if (shareError) {
+      return res.status(500).json({
+        message: "Failed to create share link",
+        error: shareError.message
+      });
+    }
+
+    // 4. Return share link
+    return res.status(200).json({
+      message: "File shared successfully",
+      shareLink: `${process.env.FRONTEND_URL}/share/${token}`
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error during file sharing",
+      error: error.message
+    });
+  }
+};
+
+/* ============================== */
+/* GET SHARED FILE (PUBLIC)       */
+/* ============================== */
+export const getsharedfile = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // 1. Validate share token
+    const { data: share, error: shareError } = await supabase
+      .from("file_shares")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    if (shareError || !share) {
+      return res.status(404).json({
+        message: "Invalid share link"
+      });
+    }
+
+    // 2. Check expiration
+    if (share.expires_at && new Date(share.expires_at) < new Date()) {
+      return res.status(410).json({
+        message: "Share link has expired"
+      });
+    }
+
+    // 3. Fetch file metadata
+    const { data: file, error: fileError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", share.file_id)
+      .single();
+
+    if (fileError || !file) {
+      return res.status(404).json({
+        message: "File not found"
+      });
+    }
+
+    // 4. Generate signed download URL
+    const { data: signedUrlData, error: urlError } =
+      await supabase.storage
+        .from("user-files")
+        .createSignedUrl(file.storage_path, 60 * 5);
+
+    if (urlError) {
+      return res.status(500).json({
+        message: "Failed to generate download link",
+        error: urlError.message
+      });
+    }
+
+    // 5. Return file info
+    return res.status(200).json({
+      message: "Shared file fetched successfully",
+      permission: share.permission,
+      file: {
+        id: file.id,
+        name: file.name,
+        size_bytes: file.size_bytes,
+        mime_type: file.mime_type
+      },
+      downloadUrl: signedUrlData.signedUrl
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error while accessing shared file",
+      error: error.message
+    });
+  }
+};
+
