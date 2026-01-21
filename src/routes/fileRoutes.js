@@ -3,10 +3,10 @@
 import express from "express";
 
 // Middleware to verify JWT and attach user to request
-import authMiddleware from "../middleware/authMiddleware.js";
+import authMiddleware from "../middlewares/authMiddleware.js";
 
 // Multer middleware for handling file uploads
-import upload from "../middleware/upload.middleware.js";
+import upload from "../middlewares/upload.middleware.js";
 
 // File upload controller
 import { uploadFile } from "../controllers/fileController.js";

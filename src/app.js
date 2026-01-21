@@ -2,9 +2,10 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
-import uploadRoutes from "./routes/upload.routes.js"; //import upload routes
+import uploadRoutes from "./routes/uploadRoutes.js"; //import upload routes
 import folderRoutes from "./routes/folderRoutes.js"; // ✅ IMPORTED
 import shareRoutes from "./routes/shareRoutes.js";
+import searchRoutes from "./routes/searchRoutes.js";
 
 const app = express();
 
@@ -41,5 +42,6 @@ app.use("/api/files", fileRoutes);
 app.use("/api/upload", uploadRoutes); //upload routes
 app.use("/api/folders", folderRoutes); // ✅ MOUNTED
 app.use("/api/share", shareRoutes);
+app.use("/api/search", searchRoutes);
 
 export default app;

@@ -18,14 +18,14 @@ import express from "express";
  * - Reads incoming file from request
  * - Makes it available as req.file
  */
-import upload from "../middleware/upload.middleware.js";
+import upload from "../middlewares/upload.middleware.js";
 
 /**
  * Controller
  * - Contains the actual upload handling logic
  */
 import { uploadFileController } from "../controllers/upload.controller.js";
-import authMiddleware from "../middleware/authMiddleware.js"; // ✅ ADDED: auth middleware
+import authMiddleware from "../middlewares/authMiddleware.js"; // ✅ ADDED: auth middleware
 
 const router = express.Router();
 

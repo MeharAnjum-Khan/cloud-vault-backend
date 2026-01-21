@@ -3,7 +3,7 @@
 import express from "express";
 
 // Middleware to verify JWT and attach user to request
-import authMiddleware from "../middleware/authMiddleware.js";
+import authMiddleware from "../middlewares/authMiddleware.js";
 
 // Folder controllers
 import {
