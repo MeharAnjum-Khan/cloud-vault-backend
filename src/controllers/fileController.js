@@ -1,12 +1,13 @@
 // src/controllers/fileController.js
 
 import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js"; // ✅ ADDED
 import supabase from "../config/supabaseClient.js";
 
 export const uploadFile = async (req, res) => {
   try {
     const file = req.file;
-        // ❗ CRITICAL SAFETY CHECK (PREVENTS NULL VALUES)
+    // ❗ CRITICAL SAFETY CHECK (PREVENTS NULL VALUES)
     if (!file || !file.buffer || !file.size || !file.mimetype) {
       return res.status(400).json({
         message: "Invalid file data received from upload middleware"
@@ -58,7 +59,7 @@ export const uploadFile = async (req, res) => {
           is_deleted: false
         }
       ])
-      .select()
+      .select("*, size:size_bytes")
       .single();
 
     if (dbError) {
@@ -91,7 +92,7 @@ export const getMyFiles = async (req, res) => {
 
     let query = supabase
       .from("files")
-      .select("*")
+      .select("*, size:size_bytes")
       .eq("owner_id", userId);
 
     if (trash === "true") {
@@ -331,9 +332,10 @@ export const permanentDeleteFile = async (req, res) => {
 export const sharefile = async (req, res) => {
   try {
     const { fileId } = req.params;
+    const { permission } = req.body; // ✅ CAPTURE PERMISSION
     const userId = req.user.id;
 
-    // 1. Verify file ownership
+    // 1. Verify file ownership (Standard Client is fine for reading if policy allows, but let's be safe)
     const { data: file, error: fileError } = await supabase
       .from("files")
       .select("*")
@@ -350,15 +352,27 @@ export const sharefile = async (req, res) => {
     // 2. Generate secure share token
     const token = crypto.randomUUID();
 
-    // 3. Save share record
-    const { error: shareError } = await supabase
+    // 3. Create Admin Client to Bypass RLS on Insert
+    const adminSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    // 4. Save share record
+    const { error: shareError } = await adminSupabase
       .from("file_shares")
       .insert([
         {
           file_id: fileId,
           creator_id: userId,
           token,
-          permission: "view", // default permission
+          permission: permission || "view", // ✅ USE PERMISSION
           expires_at: null
         }
       ]);
@@ -370,7 +384,8 @@ export const sharefile = async (req, res) => {
       });
     }
 
-    // 4. Return share link
+    // 5. Return share link
+    // Note: FRONTEND_URL might be undefined, frontend handles replacement fallback
     return res.status(200).json({
       message: "File shared successfully",
       shareLink: `${process.env.FRONTEND_URL}/share/${token}`
@@ -391,8 +406,21 @@ export const getsharedfile = async (req, res) => {
   try {
     const { token } = req.params;
 
-    // 1. Validate share token
-    const { data: share, error: shareError } = await supabase
+    // 1. Create Admin Supabase Client (Bypass RLS for public link access)
+    // REQUIRED because "Anon" users usually can't select from file_shares/files
+    const adminSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    // 2. Validate share token
+    const { data: share, error: shareError } = await adminSupabase
       .from("file_shares")
       .select("*")
       .eq("token", token)
@@ -404,15 +432,15 @@ export const getsharedfile = async (req, res) => {
       });
     }
 
-    // 2. Check expiration
+    // 3. Check expiration
     if (share.expires_at && new Date(share.expires_at) < new Date()) {
       return res.status(410).json({
         message: "Share link has expired"
       });
     }
 
-    // 3. Fetch file metadata
-    const { data: file, error: fileError } = await supabase
+    // 4. Fetch file metadata
+    const { data: file, error: fileError } = await adminSupabase
       .from("files")
       .select("*")
       .eq("id", share.file_id)
@@ -424,11 +452,11 @@ export const getsharedfile = async (req, res) => {
       });
     }
 
-    // 4. Generate signed download URL
+    // 5. Generate signed download URL
     const { data: signedUrlData, error: urlError } =
-      await supabase.storage
+      await adminSupabase.storage
         .from("user-files")
-        .createSignedUrl(file.storage_path, 60 * 5);
+        .createSignedUrl(file.storage_path, 60 * 5); // 5 minutes expiry
 
     if (urlError) {
       return res.status(500).json({
@@ -437,14 +465,14 @@ export const getsharedfile = async (req, res) => {
       });
     }
 
-    // 5. Return file info
+    // 6. Return file info
     return res.status(200).json({
       message: "Shared file fetched successfully",
       permission: share.permission,
       file: {
         id: file.id,
         name: file.name,
-        size_bytes: file.size_bytes,
+        size: file.size_bytes,
         mime_type: file.mime_type
       },
       downloadUrl: signedUrlData.signedUrl
@@ -453,6 +481,62 @@ export const getsharedfile = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       message: "Server error while accessing shared file",
+      error: error.message
+    });
+  }
+};
+
+/* ================================================= */
+/* GET FILES SHARED BY ME (DASHBOARD PAGE)           */
+/* ================================================= */
+export const getMySharedFiles = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Fetch shares created by this user
+    // We select the share info AND the related file info
+    const { data: shares, error } = await supabase
+      .from("file_shares")
+      .select(`
+        *,
+        files:file_id (
+          id,
+          name,
+          size_bytes,
+          mime_type,
+          created_at
+        )
+      `)
+      .eq("creator_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return res.status(500).json({
+        message: "Failed to fetch shared files",
+        error: error.message
+      });
+    }
+
+    // 2. Format response to match FileList structure
+    // We map the result so it looks like a normal file object to the frontend
+    const formattedFiles = shares.map(share => ({
+      id: share.files.id,
+      name: share.files.name,
+      size_bytes: share.files.size_bytes,
+      mime_type: share.files.mime_type,
+      created_at: share.files.created_at,
+      share_token: share.token, // Extra info: share link token
+      is_shared: true
+    }));
+
+    return res.status(200).json({
+      message: "Shared files fetched",
+      files: formattedFiles
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error fetching shared files",
       error: error.message
     });
   }
