@@ -19,13 +19,12 @@ export const searchFiles = async (req, res) => {
       .range(from, to)
       .order("created_at", { ascending: false });
 
-    // Apply full-text search if query exists
+    // Apply partial search if query exists
     if (searchQuery) {
-      query = query.textSearch(
-        "search_vector",
-        searchQuery,
-        { type: "websearch" }
-      );
+      // ✅ CHANGED: Replaced textSearch with ilike for better partial matching
+      // This enables finding "CNS" inside "TAE_CNS.pdf" and ignores case.
+      // Note: Ensure your database column is named 'name' (or 'file_name').
+      query = query.ilike("name", `%${searchQuery}%`);
     }
 
     const { data, error, count } = await query;

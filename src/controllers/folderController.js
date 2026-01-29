@@ -1,42 +1,56 @@
 // src/controllers/folderController.js
 
-// Import the Supabase client that you already configured
-// This allows us to interact with Supabase Database
 import supabase from "../config/supabaseClient.js";
+
+/* ---------------------------------------------------------------
+   ✅ NEW HELPER FUNCTION: Fetch Breadcrumbs (Ancestors)
+   This loops backwards from the current folder to the root 
+   to build the path: "Home > Folder A > Folder B"
+   ---------------------------------------------------------------
+*/
+const getBreadcrumbs = async (folderId, userId) => {
+  const breadcrumbs = [];
+  let currentId = folderId;
+
+  // Loop until we hit the root (null)
+  while (currentId) {
+    const { data, error } = await supabase
+      .from("folders")
+      .select("id, name, parent_id")
+      .eq("id", currentId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (error || !data) break;
+
+    // Add current folder to the START of the array
+    breadcrumbs.unshift({ id: data.id, name: data.name });
+    
+    // Move up to the parent
+    currentId = data.parent_id;
+  }
+
+  // Always add "My Files" (Root) at the very beginning
+  breadcrumbs.unshift({ id: null, name: "My Files" });
+  return breadcrumbs;
+};
+
 
 /*
   CONTROLLER: Create Folder
-
-  Responsibility of this function:
-  1. Receive folder details from request body
-  2. Associate folder with logged-in user
-  3. Support nested folders using parent_id
-  4. Save folder metadata into the `folders` table
+  (No changes needed here, keeping original code)
 */
 export const createFolder = async (req, res) => {
   try {
-    // Folder name and optional parent folder ID from request body
     const { name, parent_id = null } = req.body;
-
-    // Logged-in user's ID from auth middleware
     const userId = req.user.id;
 
-    // Safety check: folder name is required
     if (!name) {
       return res.status(400).json({
         message: "Folder name is required",
       });
     }
 
-    /*
-      Insert folder into `folders` table
-
-      Mapping to your existing table columns:
-      ---------------------------------------
-      name       → folder name
-      owner_id   → logged-in user
-      parent_id  → null (root) or another folder's ID
-    */
     const { data: folder, error } = await supabase
       .from("folders")
       .insert([
@@ -49,7 +63,6 @@ export const createFolder = async (req, res) => {
       .select()
       .single();
 
-    // If database insert fails
     if (error) {
       return res.status(500).json({
         message: "Failed to create folder",
@@ -57,14 +70,12 @@ export const createFolder = async (req, res) => {
       });
     }
 
-    // Success response
     return res.status(201).json({
       message: "Folder created successfully",
       folder,
     });
 
   } catch (error) {
-    // Catch any unexpected server errors
     return res.status(500).json({
       message: "Server error while creating folder",
       error: error.message,
@@ -73,16 +84,15 @@ export const createFolder = async (req, res) => {
 };
 
 /* ===================================== */
-/* GET ALL FOLDERS OF LOGGED-IN USER      */
+/* GET ALL FOLDERS OF LOGGED-IN USER     */
 /* ===================================== */
 export const getMyFolders = async (req, res) => {
   try {
-    // Logged-in user ID
     const userId = req.user.id;
     const { parentId, trash } = req.query;
 
     /*
-      Fetch folders of the user
+      Fetch folders (Children)
     */
     let query = supabase
       .from("folders")
@@ -92,7 +102,6 @@ export const getMyFolders = async (req, res) => {
     if (trash === "true") {
       query = query.eq("is_deleted", true);
     } else {
-      // Only active folders
       query = query.eq("is_deleted", false);
       if (parentId) {
         query = query.eq("parent_id", parentId);
@@ -101,6 +110,7 @@ export const getMyFolders = async (req, res) => {
       }
     }
 
+    // Execute the query to get sub-folders
     const { data: folders, error } = await query.order("created_at", { ascending: true });
 
     if (error) {
@@ -110,9 +120,20 @@ export const getMyFolders = async (req, res) => {
       });
     }
 
+    // ✅ NEW: Generate Breadcrumbs if we are inside a folder
+    let breadcrumbs = [];
+    if (!trash && parentId) {
+      // If we are deep inside a folder, fetch the path
+      breadcrumbs = await getBreadcrumbs(parentId, userId);
+    } else {
+      // If we are at root or trash, just show "My Files"
+      breadcrumbs = [{ id: null, name: "My Files" }];
+    }
+
     return res.status(200).json({
       message: "Folders fetched successfully",
       folders,
+      breadcrumbs, // ✅ Sending breadcrumbs to frontend
     });
 
   } catch (error) {
@@ -124,19 +145,13 @@ export const getMyFolders = async (req, res) => {
 };
 
 /* ===================================== */
-/* DELETE FOLDER (SOFT DELETE)            */
+/* DELETE FOLDER (SOFT DELETE)           */
 /* ===================================== */
 export const deleteFolder = async (req, res) => {
   try {
-    // Folder ID from URL params
     const { folderId } = req.params;
-
-    // Logged-in user ID
     const userId = req.user.id;
 
-    /*
-      Step 1: Verify folder ownership
-    */
     const { data: folder, error: fetchError } = await supabase
       .from("folders")
       .select("*")
@@ -150,9 +165,6 @@ export const deleteFolder = async (req, res) => {
       });
     }
 
-    /*
-      Step 2: Soft delete the folder
-    */
     const { error: deleteError } = await supabase
       .from("folders")
       .update({ is_deleted: true })
@@ -178,7 +190,7 @@ export const deleteFolder = async (req, res) => {
 };
 
 /* ===================================== */
-/* RESTORE FOLDER (FROM TRASH)            */
+/* RESTORE FOLDER (FROM TRASH)           */
 /* ===================================== */
 export const restoreFolder = async (req, res) => {
   try {
@@ -223,7 +235,7 @@ export const restoreFolder = async (req, res) => {
 };
 
 /* ===================================== */
-/* RENAME FOLDER                          */
+/* RENAME FOLDER                         */
 /* ===================================== */
 export const renameFolder = async (req, res) => {
   try {

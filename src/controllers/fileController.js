@@ -271,6 +271,53 @@ export const renameFile = async (req, res) => {
   }
 };
 
+/* ============================== */
+/* DOWNLOAD FILE (GET SIGNED URL) */
+/* ============================== */
+export const downloadFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const userId = req.user.id;
+
+    // Fetch file metadata and verify ownership
+    const { data: file, error: fetchError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (fetchError || !file) {
+      return res.status(404).json({
+        message: "File not found or access denied"
+      });
+    }
+
+    // Generate signed download URL (valid for 5 minutes)
+    const { data: signedUrlData, error: urlError } = await supabase.storage
+      .from("user-files")
+      .createSignedUrl(file.storage_path, 60 * 5);
+
+    if (urlError) {
+      return res.status(500).json({
+        message: "Failed to generate download link",
+        error: urlError.message
+      });
+    }
+
+    return res.status(200).json({
+      message: "Download URL generated successfully",
+      downloadUrl: signedUrlData.signedUrl
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error during file download",
+      error: error.message
+    });
+  }
+};
+
 /* ================================= */
 /* PERMANENT DELETE FILE (HARD)      */
 /* ================================= */

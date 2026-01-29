@@ -13,6 +13,7 @@ import { uploadFile } from "../controllers/fileController.js";
 import { getMyFiles } from "../controllers/fileController.js"; // updated
 import { deleteFile } from "../controllers/fileController.js"; // delete method added
 //import { downloadFile } from "../controllers/fileController.js"; // download method added
+import { downloadFile } from "../controllers/fileController.js"; // download method added
 import { permanentDeleteFile } from "../controllers/fileController.js"; // permanent delete method added
 import { renameFile, restoreFile } from "../controllers/fileController.js";
 import { sharefile, getMySharedFiles } from "../controllers/fileController.js";
@@ -78,11 +79,11 @@ router.delete(
   1. authMiddleware → checks JWT & sets req.user
   2. downloadFile → generates signed download URL
 */
-// router.get(
-//   "/:fileId/download",
-//   authMiddleware,
-//   downloadFile
-// ); // download method added
+router.get(
+  "/:fileId/download",
+  authMiddleware,
+  downloadFile
+); // download method added
 
 /*
   Route: DELETE /api/files/:fileId/permanent
