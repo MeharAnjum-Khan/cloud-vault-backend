@@ -25,32 +25,43 @@ export const uploadFile = async (req, res) => {
     const userId = req.user.id;
     const { folder_id } = req.body;
 
-    if (!file) {
-      return res.status(400).json({
-        message: "No file uploaded"
-      });
-    }
+    // 1. Create Admin Supabase Client (Bypass RLS for Backend Logic)
+    // This is safe because we already verified the user via authMiddleware
+    const adminSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
     const storagePath = `${userId}/${Date.now()}-${file.originalname}`;
 
-    const { error: storageError } = await supabase.storage
+    // 2. Upload to Supabase Storage
+    const { error: storageError } = await adminSupabase.storage
       .from("user-files")
       .upload(storagePath, file.buffer, {
-        contentType: file.mimetype
+        contentType: file.mimetype,
+        upsert: false
       });
 
     if (storageError) {
+      console.error("Supabase Storage Error:", storageError);
       return res.status(500).json({
         message: "Failed to upload file to storage",
-        error: storageError.message
+        error: storageError.message || storageError
       });
     }
 
-    const { data: fileRecord, error: dbError } = await supabase
+    // 3. Save Metadata to Database
+    const { data: fileRecord, error: dbError } = await adminSupabase
       .from("files")
       .insert([
         {
-          owner_id: req.user.id,
+          owner_id: userId,
           name: file.originalname,
           size_bytes: file.size,
           mime_type: file.mimetype,
@@ -90,9 +101,15 @@ export const getMyFiles = async (req, res) => {
     const userId = req.user.id;
     const { folderId, trash } = req.query;
 
+    // Pagination params
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
     let query = supabase
       .from("files")
-      .select("*, size:size_bytes")
+      .select("*, size:size_bytes", { count: "exact" })
       .eq("owner_id", userId);
 
     if (trash === "true") {
@@ -107,9 +124,9 @@ export const getMyFiles = async (req, res) => {
       }
     }
 
-    const { data: files, error } = await query.order("created_at", {
-      ascending: false
-    });
+    const { data: files, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       return res.status(500).json({
@@ -120,7 +137,13 @@ export const getMyFiles = async (req, res) => {
 
     return res.status(200).json({
       message: "Files fetched successfully",
-      files
+      files,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        hasMore: from + (files?.length || 0) < count
+      }
     });
 
   } catch (error) {
